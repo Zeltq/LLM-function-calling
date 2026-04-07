@@ -1,5 +1,5 @@
-torch
-transformers
-huggingface_hub
-accelerate
-python-dotenv
+torch>=2.0.0
+transformers>=4.40.0
+huggingface_hub>=0.20.0
+accelerate>=0.26.0
+python-dotenv>=1.0.0

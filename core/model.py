@@ -2,11 +2,14 @@
 Модуль для загрузки и инициализации модели.
 Поддерживает Qwen2.5 и другие causal LM модели.
 """
+import logging
 from transformers import AutoTokenizer, AutoModelForCausalLM
 from huggingface_hub import login
 import torch
 
-from utils.config import HF_TOKEN
+from utils.config import HF_TOKEN, MODEL_ID
+
+logger = logging.getLogger(__name__)
 
 
 class ModelLoader:
@@ -19,16 +22,23 @@ class ModelLoader:
     _model = None
     _tokenizer = None
 
-    def __new__(cls, model_id: str = "Qwen/Qwen2.5-3B-Instruct"):
+    def __new__(cls, model_id: str = MODEL_ID):
         if cls._instance is None:
             cls._instance = super().__new__(cls)
             cls._instance.model_id = model_id
             cls._instance._load_model()
+        elif cls._instance.model_id != model_id:
+            logger.warning(
+                "ModelLoader уже инициализирован с моделью '%s'. "
+                "Запрос на '%s' проигнорирован — перезапустите процесс для смены модели.",
+                cls._instance.model_id,
+                model_id,
+            )
         return cls._instance
 
     def _load_model(self):
         """Загружает модель и токенизатор."""
-        print(f"Загрузка модели: {self.model_id}...")
+        logger.info("Загрузка модели: %s...", self.model_id)
 
         # Авторизация в Hugging Face
         login(token=HF_TOKEN)
@@ -51,9 +61,9 @@ class ModelLoader:
         if self._tokenizer.pad_token_id is None:
             self._tokenizer.pad_token_id = self._tokenizer.eos_token_id
 
-        print(f"Модель загружена: {self.model_id}")
-        print(f"Устройство: {self._model.device}")
-        print(f"Тип данных: {self._model.dtype}")
+        logger.info("Модель загружена: %s", self.model_id)
+        logger.info("Устройство: %s", self._model.device)
+        logger.info("Тип данных: %s", self._model.dtype)
 
     @property
     def model(self):

@@ -25,6 +25,7 @@ class ParseResult:
     parameters: Optional[dict] = None  # Параметры вызова
     text_response: Optional[str] = None  # Текстовый ответ (если не вызов)
     raw_response: Optional[str] = None  # Сырой ответ модели
+    parse_warning: Optional[str] = None  # Предупреждение при парсинге (напр., неизвестная функция)
 
     def __repr__(self):
         if self.called:
@@ -89,13 +90,19 @@ def _try_parse_json(text: str) -> Optional[dict]:
     return None
 
 
-def parse_response(raw_text: str) -> ParseResult:
+def parse_response(
+    raw_text: str,
+    known_functions: set[str] | None = None,
+) -> ParseResult:
     """
     Парсит ответ модели и определяет, был ли вызов функции.
     Поддерживает форматы FunctionGemma и Qwen2.5.
 
     Args:
         raw_text: Сырой ответ модели (после декодирования)
+        known_functions: Множество допустимых имён функций. Если передано и имя
+            функции отсутствует в множестве, возвращает текстовый ответ с
+            предупреждением вместо вызова несуществующей функции.
 
     Returns:
         ParseResult с результатом разбора
@@ -114,6 +121,14 @@ def parse_response(raw_text: str) -> ParseResult:
         except json.JSONDecodeError:
             parameters = {"raw": param_str}
 
+        if known_functions is not None and function_name not in known_functions:
+            return ParseResult(
+                called=False,
+                text_response=raw_text,
+                raw_response=raw_text,
+                parse_warning=f"Модель вызвала неизвестную функцию: '{function_name}'",
+            )
+
         return ParseResult(
             called=True,
             function_name=function_name,
@@ -124,9 +139,19 @@ def parse_response(raw_text: str) -> ParseResult:
     # 2. Проверяем формат Qwen2.5 (JSON)
     json_data = _try_parse_json(raw_text)
     if json_data and "name" in json_data:
+        function_name = json_data["name"]
+
+        if known_functions is not None and function_name not in known_functions:
+            return ParseResult(
+                called=False,
+                text_response=raw_text,
+                raw_response=raw_text,
+                parse_warning=f"Модель вызвала неизвестную функцию: '{function_name}'",
+            )
+
         return ParseResult(
             called=True,
-            function_name=json_data["name"],
+            function_name=function_name,
             parameters=json_data.get("arguments", {}),
             raw_response=raw_text
         )

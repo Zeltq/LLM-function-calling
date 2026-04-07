@@ -8,8 +8,6 @@ Qwen2.5 использует JSON-формат для function calling:
 {"name": "function_name", "arguments": {"param1": "value1"}}
 """
 import torch
-import json
-import re
 
 from core.model import get_model
 from core.parser import parse_response, ParseResult
@@ -125,8 +123,9 @@ class FunctionCaller:
             skip_special_tokens=True
         ).strip()
 
-        # Парсим ответ
-        result = parse_response(response_text)
+        # Парсим ответ, передавая допустимые имена функций для валидации
+        known = {f["function"]["name"] for f in self.functions}
+        result = parse_response(response_text, known_functions=known)
 
         return result
 

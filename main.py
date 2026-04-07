@@ -8,15 +8,14 @@ Function Calling с FunctionGemma - Тестирование и интеракт
     python main.py --test --verbose    # Тесты с подробным выводом
 """
 import argparse
+import logging
 import sys
 from collections import deque
 
 from core.function_caller import FunctionCaller
 from config.functions import get_functions
 from test.runner import run_tests
-
-# Максимальное количество последних сообщений для контекста
-MAX_CONTEXT_MESSAGES = 3
+from utils.config import MAX_CONTEXT_MESSAGES, MAX_HISTORY_SIZE
 
 
 def get_context_messages(full_history: list, role: str) -> list:
@@ -46,22 +45,10 @@ def build_context(full_history: list) -> list:
     Returns:
         Список сообщений для отправки в модель
     """
-    user_messages = get_context_messages(full_history, "user")
-    assistant_messages = get_context_messages(full_history, "assistant")
-
-    # Объединяем и сортируем по порядку появления в истории
-    context = []
-    seen_ids = set()
-    for msg in user_messages + assistant_messages:
-        msg_id = id(msg)
-        if msg_id not in seen_ids:
-            context.append(msg)
-            seen_ids.add(msg_id)
-
-    # Сортируем по позиции в оригинальной истории
-    context.sort(key=lambda m: full_history.index(m))
-
-    return context
+    user_msgs = [m for m in full_history if m["role"] == "user"][-MAX_CONTEXT_MESSAGES:]
+    asst_msgs = [m for m in full_history if m["role"] == "assistant"][-MAX_CONTEXT_MESSAGES:]
+    include = set(id(m) for m in user_msgs + asst_msgs)
+    return [m for m in full_history if id(m) in include]
 
 
 def run_interactive():
@@ -78,8 +65,7 @@ def run_interactive():
         print(f"  - {func['function']['name']}: {func['function']['description']}")
     print()
 
-    # Инициализируем FunctionCaller
-    print("Загрузка модели...")
+    # Инициализируем FunctionCaller (загрузка модели логируется в core/model.py)
     caller = FunctionCaller(functions=functions)
 
     print()
@@ -95,7 +81,7 @@ def run_interactive():
     print("-" * 80)
 
     # Полная история диалога
-    full_history = deque()
+    full_history = deque(maxlen=MAX_HISTORY_SIZE)
 
     while True:
         try:
@@ -195,6 +181,11 @@ def run_test_mode(verbose: bool = True):
 
 def main():
     """Главная точка входа."""
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    )
+
     parser = argparse.ArgumentParser(
         description="Function Calling с FunctionGemma"
     )
